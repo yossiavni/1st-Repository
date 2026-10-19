@@ -9,6 +9,7 @@ const fa = require("react-icons/fa");
 
 const SKILL = process.argv[2];
 const { applyTheme } = require(path.join(SKILL, "scripts/apply_theme.js"));
+const { addAnimations } = require("./animate");
 const ROOT = path.resolve(__dirname, "..");
 const OUT = path.join(ROOT, "Beam_Executive_Summary.pptx");
 
@@ -30,6 +31,7 @@ pres.theme = { headFontFace: THEME.headFontFace, bodyFontFace: THEME.bodyFontFac
 pres.title = "Building a Beam-Class LLM — Executive Summary";
 pres.author = "Beam research programme";
 const C = pres.SchemeColor;
+const ANIM = {}; // slide number -> click steps, applied after writing (see animate.js)
 
 const FOOT = "Building a Beam-Class LLM · Executive summary · October 2026";
 // ---------- layouts ----------
@@ -142,21 +144,95 @@ const chartBase = {
   ], { x: 6.5, y: 1.55, w: 3.0, h: 3.3, fontSize: 13, color: C.text1, paraSpaceAfter: 6 });
   s.addNotes("Beam is a sparse mixture-of-experts model: 501 billion parameters stored, about 23 billion used per token. It was released under Apache 2.0 with BF16, FP8 and NVFP4 checkpoints, a speculative-decoding drafter, and Mirror CLI, the agent harness it was trained against.");
 
-  // ===== 4. Architecture =====
+  // ===== 4. How a Beam-class model works (animated) =====
   s = pres.addSlide({ masterName: "CONTENT", sectionTitle: "Beam today" });
   s.addText("Architecture built for cheap tokens", { placeholder: "title" });
-  s.addImage({ path: path.join(ROOT, "figures/fig1_architecture.png"), x: 0.5, y: 1.1, w: 5.95, h: 3.89, objectName: "architecture diagram" });
-  const arch = [
-    ["Sparse experts", "Top-8 of 256 experts: ~4.7% of weights active per token"],
-    ["Sparse long attention", "512-token window in 43 layers; full context in only 9"],
-    ["Ready to serve", "NVFP4 loses ≤1.7 pts; fits one 8-GPU node; drafter speeds agents"],
+  // token and router
+  s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: 0.5, y: 2.3, w: 1.0, h: 0.6, rectRadius: 0.1, fill: { color: C.accent1 }, line: { color: C.accent1 }, objectName: "anim token" });
+  txt(s, "Next token", { x: 0.5, y: 2.3, w: 1.0, h: 0.6, fontSize: 13, bold: true, color: C.text2, align: "center", valign: "middle", objectName: "anim token label" });
+  s.addShape(pres.shapes.RIGHT_ARROW, { x: 1.58, y: 2.47, w: 0.4, h: 0.26, fill: { color: C.accent4 }, line: { color: C.accent4 }, objectName: "anim arrow 1" });
+  s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: 2.05, y: 2.15, w: 1.05, h: 0.9, rectRadius: 0.1, fill: { color: C.text2 }, line: { color: C.text2 }, objectName: "anim router" });
+  txt(s, "Router", { x: 2.05, y: 2.15, w: 1.05, h: 0.9, fontSize: 14, bold: true, color: C.background1, align: "center", valign: "middle", objectName: "anim router label" });
+  s.addShape(pres.shapes.RIGHT_ARROW, { x: 3.17, y: 2.47, w: 0.4, h: 0.26, fill: { color: C.accent4 }, line: { color: C.accent4 }, objectName: "anim arrow 2" });
+  // 16 x 16 expert grid
+  const GX = 3.7, GY = 1.12, CELL = 0.19, SQ = 0.15;
+  for (let r = 0; r < 16; r++) for (let c = 0; c < 16; c++)
+    s.addShape(pres.shapes.RECTANGLE, { x: GX + c * CELL, y: GY + r * CELL, w: SQ, h: SQ, fill: { color: "D5DAE3" }, line: { color: "D5DAE3" }, objectName: `anim expert ${r}-${c}` });
+  txt(s, "256 experts stored · 501B parameters", { x: GX, y: GY + 16 * CELL + 0.05, w: 3.05, h: 0.3, fontSize: 12, color: C.accent4, align: "center", objectName: "anim grid label" });
+  const ACTIVE = [[1, 3], [2, 11], [5, 6], [7, 14], [9, 1], [11, 9], [13, 4], [14, 12]];
+  ACTIVE.forEach(([r, c], i) => s.addShape(pres.shapes.RECTANGLE, { x: GX + c * CELL - 0.02, y: GY + r * CELL - 0.02, w: SQ + 0.04, h: SQ + 0.04,
+    fill: { color: C.accent1 }, line: { color: C.text2, width: 1 }, objectName: `anim active ${i}` }));
+  txt(s, "Only 8 run for this token", { x: GX, y: GY + 16 * CELL + 0.35, w: 3.05, h: 0.3, fontSize: 12, bold: true, color: C.text2, align: "center", objectName: "anim active label" });
+  // right-hand narrative
+  const RX = 7.0, RW = 2.5;
+  const cap = (n, head, body, y, name) => txt(s, [
+    { text: `${n}  ${head}`, options: { bold: true, color: C.accent2, breakLine: true } },
+    { text: body, options: { color: C.text1 } },
+  ], { x: RX, y, w: RW, h: 0.72, fontSize: 12, objectName: name });
+  cap("1", "A router reads the token", "and scores every expert", 1.12, "anim cap 1");
+  cap("2", "256 specialist experts", "hold the model’s knowledge", 1.84, "anim cap 2");
+  cap("3", "Only the top 8 wake up", "23.4B of 501B parameters (4.7%)", 2.56, "anim cap 3");
+  txt(s, "Compute per token", { x: RX, y: 3.4, w: RW, h: 0.3, fontSize: 12, bold: true, color: C.text2, objectName: "anim bars title" });
+  txt(s, "Dense 501B model", { x: RX, y: 3.72, w: RW, h: 0.25, fontSize: 11, color: C.text1, objectName: "anim dense label" });
+  s.addShape(pres.shapes.RECTANGLE, { x: RX, y: 3.98, w: RW, h: 0.22, fill: { color: C.accent4 }, line: { color: C.accent4 }, objectName: "anim dense bar" });
+  txt(s, "Beam (4.7%)", { x: RX, y: 4.28, w: RW, h: 0.25, fontSize: 11, color: C.text1, objectName: "anim beam label" });
+  s.addShape(pres.shapes.RECTANGLE, { x: RX, y: 4.54, w: RW * 0.047, h: 0.22, fill: { color: C.accent1 }, line: { color: C.accent1 }, objectName: "anim beam bar" });
+  txt(s, "≈ 21× less compute", { x: RX + 0.25, y: 4.5, w: 2.2, h: 0.3, fontSize: 14, bold: true, color: C.accent2, objectName: "anim beam callout" });
+  s.addNotes("Animated build, five clicks. Click 1: each new token goes to a router. Click 2: the router chooses among 256 specialist experts, which together hold the model's 501 billion parameters. Click 3: only the top 8 experts actually run for this token, so just 23.4 billion parameters (4.7%) do any work. Click 4: compared with a dense model of the same size, each token needs about 21 times less compute. The model has the knowledge capacity of a very large model but the running cost of a small one.");
+  ANIM[s._slideNum] = [
+    [{ items: ["anim arrow 1", "anim router", "anim router label", "anim cap 1"] }],
+    [{ items: ["anim arrow 2", ...[...Array(256).keys()].map((k) => `anim expert ${Math.floor(k / 16)}-${k % 16}`), "anim grid label", "anim cap 2"] }],
+    [{ items: [...ACTIVE.map((_, i) => `anim active ${i}`), "anim active label", "anim cap 3"] }],
+    [{ items: ["anim bars title", "anim dense label", { name: "anim dense bar", effect: "wipe", dur: 800 }] },
+     { delay: 800, items: ["anim beam label", { name: "anim beam bar", effect: "wipe", dur: 300 }, "anim beam callout"] }],
   ];
-  arch.forEach(([h, b], i) => {
-    const y = 1.15 + i * 1.3;
-    txt(s, h, { x: 6.75, y, w: 2.75, h: 0.35, fontSize: 15, bold: true, color: C.accent2 });
-    txt(s, b, { x: 6.75, y: y + 0.38, w: 2.75, h: 0.8, fontSize: 13, color: C.text1 });
-  });
-  s.addNotes("The design choices are all published techniques: DeepSeek-style fine-grained experts with auxiliary-loss-free balancing, a sliding-window/global attention mix with no positional encoding on global layers, gated attention, SandwichNorm and FP32 residuals. Nothing here is proprietary, which is good news for a replication.");
+
+  // ===== 5. Why each token costs less (animated) =====
+  s = pres.addSlide({ masterName: "CONTENT", sectionTitle: "Beam today" });
+  s.addText("Why each token costs less", { placeholder: "title" });
+  const lever = (i, head, body, name) => {
+    const x = 0.5 + (i % 2) * 4.6, y = 1.1 + Math.floor(i / 2) * 1.8;
+    card(s, x, y, 4.4, 1.65, name + " card");
+    txt(s, head, { x: x + 0.2, y: y + 0.12, w: 4.0, h: 0.32, fontSize: 15, bold: true, color: C.text2, objectName: name + " head" });
+    txt(s, body, { x: x + 0.2, y: y + 0.5, w: 2.45, h: 1.05, fontSize: 12, color: C.text1, objectName: name + " body" });
+    return { x, y };
+  };
+  // A: sparse experts
+  let L = lever(0, "1 · Sparse experts", "Only 8 of 256 experts run per token, so a 501B model computes like a ~23B one.", "lev a");
+  txt(s, "21×", { x: L.x + 2.75, y: L.y + 0.5, w: 1.5, h: 0.6, fontSize: 36, bold: true, color: C.accent1, align: "center", fontFace: THEME.headFontFace, objectName: "lev a stat" });
+  txt(s, "less compute", { x: L.x + 2.75, y: L.y + 1.1, w: 1.5, h: 0.3, fontSize: 12, color: C.text1, align: "center", objectName: "lev a stat label" });
+  // B: sliding-window attention with moving window
+  L = lever(1, "2 · Short memory in most layers", "43 of 52 layers only look at the last 512 tokens; just 9 read the whole context. Memory ≈ 17% of full attention.", "lev b");
+  const BX = L.x + 2.78, BY = L.y + 0.7;
+  for (let k = 0; k < 10; k++)
+    s.addShape(pres.shapes.RECTANGLE, { x: BX + k * 0.15, y: BY, w: 0.12, h: 0.3, fill: { color: C.accent3 }, line: { color: C.accent3 }, objectName: `lev b block ${k}` });
+  s.addShape(pres.shapes.RECTANGLE, { x: BX - 0.03, y: BY - 0.06, w: 0.45, h: 0.42, fill: { color: C.accent1, transparency: 55 }, line: { color: C.accent1, width: 1.5 }, objectName: "lev b window" });
+  txt(s, "512-token window slides along", { x: BX - 0.1, y: BY + 0.45, w: 1.7, h: 0.3, fontSize: 10, color: C.accent4, align: "center", objectName: "lev b caption" });
+  // C: 4-bit weights
+  L = lever(2, "3 · 4-bit weights (NVFP4)", "Weights shrink to ~0.28 TB and fit one 8-GPU server, losing ≤ 1.7 points on agentic benchmarks.", "lev c");
+  const CX = L.x + 2.78;
+  txt(s, "16-bit  1.0 TB", { x: CX, y: L.y + 0.48, w: 1.5, h: 0.22, fontSize: 10, color: C.text1, objectName: "lev c lbl1" });
+  s.addShape(pres.shapes.RECTANGLE, { x: CX, y: L.y + 0.72, w: 1.45, h: 0.18, fill: { color: C.accent4 }, line: { color: C.accent4 }, objectName: "lev c bar1" });
+  txt(s, "4-bit  0.28 TB", { x: CX, y: L.y + 0.98, w: 1.5, h: 0.22, fontSize: 10, color: C.text1, objectName: "lev c lbl2" });
+  s.addShape(pres.shapes.RECTANGLE, { x: CX, y: L.y + 1.22, w: 1.45 * 0.28, h: 0.18, fill: { color: C.accent1 }, line: { color: C.accent1 }, objectName: "lev c bar2" });
+  // D: drafter + fewer tokens
+  L = lever(3, "4 · Fewer, faster tokens", "A 1.9B “drafter” guesses several tokens that Beam checks in one pass, and Beam uses ~40% fewer output tokens per task.", "lev d");
+  txt(s, "−40%", { x: L.x + 2.75, y: L.y + 0.5, w: 1.5, h: 0.6, fontSize: 32, bold: true, color: C.accent1, align: "center", fontFace: THEME.headFontFace, objectName: "lev d stat" });
+  txt(s, "output tokens", { x: L.x + 2.75, y: L.y + 1.1, w: 1.5, h: 0.3, fontSize: 12, color: C.text1, align: "center", objectName: "lev d stat label" });
+  txt(s, [{ text: "The trade-off: ", options: { bold: true, color: C.accent2 } },
+    { text: "frontier-scale knowledge at small-model running cost, but capability still trails the frontier (independent index 30 vs 58).", options: { color: C.text1 } }],
+    { x: 0.5, y: 4.72, w: 9.0, h: 0.42, fontSize: 13, valign: "middle", objectName: "lev takeaway" });
+  s.addNotes("Animated build, five clicks, one cost lever per click. 1: sparse experts give about 21 times less compute per token than a dense model of the same size. 2: most layers keep only a 512-token short-term memory (watch the window slide), so long-context memory is about 17% of a full-attention design. 3: 4-bit weights cut memory from about 1 TB to 0.28 TB, so the model fits one 8-GPU server. 4: a small drafter model speeds up generation, and Beam finishes tasks with about 40% fewer output tokens. The levers stack, but the trade-off is capability: Beam scores 30 on the independent index against 58 for the leader.");
+  const g = (pfx) => [pfx + " card", pfx + " head", pfx + " body"];
+  ANIM[s._slideNum] = [
+    [{ items: [...g("lev a"), "lev a stat", "lev a stat label"] }],
+    [{ items: [...g("lev b"), ...[...Array(10).keys()].map((k) => `lev b block ${k}`), "lev b window", "lev b caption"] },
+     { delay: 600, items: [{ name: "lev b window", effect: "path", path: "M 0 0 L 0.105 0 E", dur: 2500 }] }],
+    [{ items: [...g("lev c"), "lev c lbl1", "lev c bar1", "lev c lbl2"] },
+     { delay: 600, items: [{ name: "lev c bar2", effect: "wipe", dur: 700 }] }],
+    [{ items: [...g("lev d"), "lev d stat", "lev d stat label"] }],
+    [{ items: ["lev takeaway"] }],
+  ];
 
   // ===== 5. Training =====
   s = pres.addSlide({ masterName: "CONTENT", sectionTitle: "Beam today" });
@@ -393,7 +469,13 @@ const chartBase = {
   });
   s.addNotes("Decision requested: approve Stage 1 budget (about US$11M over 3–6 months) and the choice of wedge market. Revisit the larger investment at Gate 2.");
 
-  // ===== 16. Sources =====
+  // ===== Appendix: architecture detail =====
+  s = pres.addSlide({ masterName: "CONTENT", sectionTitle: "Close" });
+  s.addText("Appendix: Beam architecture detail", { placeholder: "title" });
+  s.addImage({ path: path.join(ROOT, "figures/fig1_architecture.png"), x: 1.55, y: 1.05, w: 6.9, h: 4.1, objectName: "architecture diagram" });
+  s.addNotes("Reference diagram from the research baseline (Figure 1): 52 layers (3 dense + 49 mixture-of-experts), 256 experts with top-8 routing, gated attention with a 512-token sliding window, and full-context attention in only 9 layers.");
+
+  // ===== Sources =====
   s = pres.addSlide({ masterName: "CONTENT", sectionTitle: "Close" });
   s.addText("Sources and notes", { placeholder: "title" });
   txt(s, [
@@ -411,5 +493,6 @@ const chartBase = {
 
   await pres.writeFile({ fileName: OUT });
   await applyTheme(OUT, THEME);
+  await addAnimations(OUT, ANIM);
   console.log("wrote", OUT);
 })();

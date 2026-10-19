@@ -6,12 +6,13 @@ This folder holds research for building a new LLM comparable to Reflection AI's 
 |---|---|
 | `Beam_Research_Baseline.docx` | Full research baseline, v2.0 (37 pages, 11 figures, 42 sources). In Word, right-click the table of contents and choose *Update Field*. |
 | `Beam_Research_Baseline.pdf` | PDF rendering of the baseline. |
-| `Beam_Executive_Summary.pptx` / `.pdf` | 16-slide executive deck with speaker notes. |
+| `Beam_Executive_Summary.pptx` / `.pdf` | 18-slide executive deck with speaker notes; slides 4–5 are click-by-click animations of how Beam works and why its tokens are cheap (previews: `figures/anim_slide4_how_it_works.gif`, `figures/anim_slide5_why_cheaper.gif`). |
 | `Beam_Executive_Briefing.docx` / `.pdf` | 12-page executive briefing to read with the deck: decision requested, Stage 1 budget, 90-day plan, presenter guide. |
 | `figures/` | Architecture and pipeline diagrams, benchmark, market and cost charts. |
 | `src/make_figures.py` | Regenerates the figures: `python3 src/make_figures.py figures` (needs matplotlib). |
 | `src/build_docx.js`, `src/docx_helpers.js` | Rebuild the Word document: `node src/build_docx.js` (needs the `docx` npm package). |
 | `src/build_exec_docx.js` | Rebuilds the executive briefing: `node src/build_exec_docx.js`. |
+| `src/animate.js` | Adds PowerPoint click animations to the generated deck (pptxgenjs cannot). |
 | `src/build_pptx.js` | Rebuilds the deck: `NODE_PATH=<node_modules with pptxgenjs, react-icons, react, react-dom, sharp> node src/build_pptx.js <pptx-skill-dir>`. The second argument is the directory that holds `scripts/apply_theme.js`. |
 
 Confidence tags used throughout: [V] vendor-reported, [I] independently measured, [E] author estimate, [S] single secondary source.
